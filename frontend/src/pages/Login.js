@@ -35,7 +35,7 @@ const Login = () => {
   return (
     <div className="auth-page">
       <div className="auth-header">
-        <h1 className="page-title">🌾 AgriScope</h1>
+        <h1 className="page-title">🌾 SentinelFarm</h1>
         <p className="page-subtitle">Your Agricultural Intelligence Platform</p>
       </div>
       

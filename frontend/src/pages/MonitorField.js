@@ -169,8 +169,6 @@ const MonitorField = () => {
 
   // Weather data state
   const [weatherData, setWeatherData] = useState(null);
-
-  // Get user email from Login.js data
   const getUserEmail = () => {
     const userData = localStorage.getItem("user");
 
@@ -528,6 +526,22 @@ const MonitorField = () => {
       return;
     }
 
+    // ✅ Validate date range - Sentinel-2 has ~5 day delay
+    const today = new Date();
+    const minDate = new Date(today);
+    minDate.setDate(minDate.getDate() - 5);
+    
+    if (endDate > minDate) {
+      const suggestedEndDate = new Date(minDate);
+      showNotification(
+        `⚠️ Date too recent! Satellite data has a 4-5 day delay. ` +
+        `Latest available: ${minDate.toISOString().split('T')[0]}. ` +
+        `Please select an earlier end date.`,
+        true
+      );
+      return;
+    }
+
     const geoJSON = { 
       type: "Polygon", 
       coordinates: [[...geoCoords, geoCoords[0]].filter((coord, index, array) => 
@@ -555,7 +569,19 @@ const MonitorField = () => {
       }
     } catch (err) {
       console.error(`Error fetching ${selectedIndex}:`, err);
-      showNotification(`Failed to fetch ${selectedIndex} data: ${err.message || "Unknown error"}`, true);
+      
+      // Show backend error message if available
+      let errorMsg = `Failed to fetch ${selectedIndex} data`;
+      if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+        if (err.response.data.suggestion) {
+          errorMsg += ` - ${err.response.data.suggestion}`;
+        }
+      } else if (err.message) {
+        errorMsg += `: ${err.message}`;
+      }
+      
+      showNotification(errorMsg, true);
     } finally {
       setLoading(false);
     }
@@ -628,6 +654,8 @@ const MonitorField = () => {
       setLoading(false);
     }
   };
+
+
 
   // Convert coordinates for display
   const polygonPositions = (selectedField?.geojson_data?.coordinates[0] || aoiCoordinates)

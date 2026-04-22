@@ -1,56 +1,193 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { getFlaskApiUrl } from '../config/api';
+import FieldList from '../components/FieldList';
 import '../styles/CropSuggestion.css';
 
 const CropSuggestion = () => {
+    const navigate = useNavigate();
+
     const [formData, setFormData] = useState({
         location: '',
         area: '',
-        soil_type: '',
+        fertility_level: '',
         soil_ph: '',
-        irrigation: '',
-        experience: '',
-        budget: '',
-        previous_crop: ''
+        temperature: '',
+        humidity: '',
+        rainfall: '',
+        nitrogen: '',
+        phosphorus: '',
+        potassium: ''
     });
+
+    const [aoiCoordinates, setAoiCoordinates] = useState(null);
+    const [drawnArea, setDrawnArea] = useState(null);
+    const [weatherDataLoading, setWeatherDataLoading] = useState(false);
+    const [weatherDataFetched, setWeatherDataFetched] = useState(false);
 
     const [recommendations, setRecommendations] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    // Field selection state
+    const [fields, setFields] = useState([]);
+    const [selectedField, setSelectedField] = useState(null);
+    const [fieldsLoading, setFieldsLoading] = useState(true);
+
+    // Get user email from localStorage
+    const getUserEmail = () => {
+        const userData = localStorage.getItem('user');
+        if (userData) {
+            try {
+                const { email } = JSON.parse(userData);
+                return email;
+            } catch (err) {
+                console.error('Error parsing user data:', err);
+            }
+        }
+        navigate('/login');
+        return null;
+    };
+
+    // Fetch user fields on component mount
+    useEffect(() => {
+        const fetchFields = async () => {
+            try {
+                const email = getUserEmail();
+                if (!email) return;
+
+                const response = await axios.get(`http://localhost:3001/api/fields?email=${email}`);
+                console.log('Fields response:', response.data);
+                
+                if (response.data.fields && Array.isArray(response.data.fields)) {
+                    setFields(response.data.fields);
+                } else {
+                    console.error('Invalid field data format:', response.data);
+                    setError('Error loading saved fields');
+                }
+            } catch (err) {
+                console.error('Error fetching fields:', err);
+                setError(`Error loading saved fields: ${err.message || 'Unknown error'}`);
+            } finally {
+                setFieldsLoading(false);
+            }
+        };
+
+        fetchFields();
+    }, []);
+
+    // Fertility level to N, P, K mapping
+    const fertilityLevels = {
+        'low': { nitrogen: 35, phosphorus: 24, potassium: 40, label: 'Low Fertility' },
+        'medium': { nitrogen: 75, phosphorus: 28, potassium: 51, label: 'Medium Fertility' },
+        'high': { nitrogen: 125, phosphorus: 42, potassium: 74, label: 'High Fertility' }
+    };
+
+    // Factors needed for crop recommendation
+    const recommendationFactors = [
+        {
+            category: 'Field Information',
+            factors: [
+                { name: 'Location', description: 'Geographic coordinates and region', status: aoiCoordinates ? 'complete' : 'pending' },
+                { name: 'Field Area', description: 'Size of the field in hectares', status: formData.area ? 'complete' : 'pending' }
+            ]
+        },
+        {
+            category: 'Soil Properties',
+            factors: [
+                { name: 'Soil Fertility Level', description: 'Low, Medium, or High fertility', status: formData.fertility_level ? 'complete' : 'pending' },
+                { name: 'Soil pH', description: 'pH level indicating soil acidity/alkalinity (manual entry)', status: formData.soil_ph ? 'complete' : 'pending' }
+            ]
+        },
+        {
+            category: 'Weather & Climate',
+            factors: [
+                { name: 'Temperature', description: 'Temperature data from weather API', status: formData.temperature ? 'complete' : 'pending' },
+                { name: 'Humidity', description: 'Humidity data from weather API', status: formData.humidity ? 'complete' : 'pending' },
+                { name: 'Rainfall', description: 'Rainfall data from weather API', status: formData.rainfall ? 'complete' : 'pending' }
+            ]
+        },
+
+    ];
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
-        setFormData(prevState => ({
-            ...prevState,
-            [name]: value
-        }));
+        
+        // If fertility level changes, auto-populate N, P, K
+        if (name === 'fertility_level' && value && fertilityLevels[value]) {
+            const fertilityData = fertilityLevels[value];
+            setFormData(prevState => ({
+                ...prevState,
+                [name]: value,
+                nitrogen: fertilityData.nitrogen.toString(),
+                phosphorus: fertilityData.phosphorus.toString(),
+                potassium: fertilityData.potassium.toString()
+            }));
+        } else {
+            setFormData(prevState => ({
+                ...prevState,
+                [name]: value
+            }));
+        }
     };
 
     const generateAIRecommendations = async (e) => {
         e.preventDefault();
+        
+        // Validate required fields
+        const requiredFields = ['location', 'area', 'fertility_level', 'soil_ph', 'temperature', 'humidity', 'rainfall'];
+        const missingFields = requiredFields.filter(field => !formData[field]);
+        
+        if (missingFields.length > 0) {
+            setError(`Please fill in all required fields: ${missingFields.join(', ')}`);
+            return;
+        }
+
         setLoading(true);
         setError('');
         setRecommendations(null);
 
         try {
             const response = await axios.post(`${getFlaskApiUrl()}/api/crop-recommendations`, {
-                field_data: formData,
-                weather_data: null,
-                vegetation_data: null
+                field_data: {
+                    location: formData.location,
+                    area: parseFloat(formData.area),
+                    fertility_level: formData.fertility_level,
+                    nitrogen: parseFloat(formData.nitrogen),
+                    phosphorus: parseFloat(formData.phosphorus),
+                    potassium: parseFloat(formData.potassium),
+                    soil_ph: parseFloat(formData.soil_ph),
+                    temperature: parseFloat(formData.temperature),
+                    humidity: parseFloat(formData.humidity),
+                    rainfall: parseFloat(formData.rainfall)
+                },
+                coordinates: aoiCoordinates
             });
 
-            if (response.data.status === 'success') {
-                setRecommendations(response.data.recommendations);
-            } else if (response.data.fallback) {
-                setRecommendations(response.data);
-                setError('AI service not available. Showing fallback recommendations.');
+            console.log('Full API response:', response.data);
+
+            if (response.data && response.data.recommendations) {
+                const recs = response.data.recommendations;
+                console.log('Setting recommendations:', recs);
+                setRecommendations(recs);
+                
+                // Show status message if it's not a full success
+                if (response.data.status === 'partial') {
+                    setError('Using fallback recommendations. AI service may be initializing.');
+                }
+            } else if (response.data && response.data.fallback) {
+                // Legacy fallback handling
+                console.log('Using legacy fallback:', response.data.fallback);
+                setRecommendations(response.data.fallback);
+                setError('Using fallback recommendations. AI service may be initializing.');
             } else {
-                setError(response.data.error || 'Failed to get recommendations');
+                setError(response.data?.error || 'Failed to get recommendations');
+                console.error('Unexpected response structure:', response.data);
             }
         } catch (err) {
             console.error('Error getting AI recommendations:', err);
-            setError('Failed to connect to recommendation service. Please check if the backend server is running.');
+            setError('Failed to connect to recommendation service. Make sure the backend is running on port 5001.');
         } finally {
             setLoading(false);
         }
@@ -77,19 +214,322 @@ const CropSuggestion = () => {
         );
     };
 
+    // Handle field selection from dropdown
+    const handleFieldSelect = async (field) => {
+        if (!field) {
+            setError('No field selected');
+            return;
+        }
+        
+        setSelectedField(field);
+        console.log('=== FIELD SELECTED ===');
+        console.log('Full field object:', field);
+        
+        // Extract coordinates from various possible formats
+        let coordinates = null;
+        
+        try {
+            // Format 1: Direct coordinates array
+            if (field.coordinates && Array.isArray(field.coordinates)) {
+                coordinates = field.coordinates;
+            } 
+            // Format 2: GeoJSON geometry object
+            else if (field.geometry && field.geometry.coordinates) {
+                const geomCoord = field.geometry.coordinates;
+                // For Polygon: [[[lon, lat], [lon, lat], ...]]
+                if (geomCoord[0] && Array.isArray(geomCoord[0]) && geomCoord[0][0] && Array.isArray(geomCoord[0][0])) {
+                    coordinates = geomCoord[0];
+                } else if (geomCoord[0] && Array.isArray(geomCoord[0])) {
+                    coordinates = geomCoord;
+                }
+            } 
+            // Format 3: GeoJSON data as object or string
+            else if (field.geojson_data) {
+                let geoJson = field.geojson_data;
+                
+                // Parse if it's a string
+                if (typeof geoJson === 'string') {
+                    geoJson = JSON.parse(geoJson);
+                }
+                
+                console.log('Parsed GeoJSON:', geoJson);
+                
+                // Extract coordinates from GeoJSON
+                if (geoJson.type === 'Polygon' && geoJson.coordinates) {
+                    // Polygon format: [[[lon, lat], [lon, lat], ...]]
+                    const polygonCoords = geoJson.coordinates;
+                    if (polygonCoords[0] && Array.isArray(polygonCoords[0])) {
+                        coordinates = polygonCoords[0];
+                    }
+                } else if (geoJson.geometry && geoJson.geometry.coordinates) {
+                    // Feature format with geometry
+                    const geomCoord = geoJson.geometry.coordinates;
+                    if (geomCoord[0] && Array.isArray(geomCoord[0]) && geomCoord[0][0] && Array.isArray(geomCoord[0][0])) {
+                        coordinates = geomCoord[0];
+                    } else if (geomCoord[0] && Array.isArray(geomCoord[0])) {
+                        coordinates = geomCoord;
+                    }
+                }
+            } 
+            // Format 4: Polygon property
+            else if (field.polygon && Array.isArray(field.polygon)) {
+                coordinates = field.polygon;
+            }
+            
+            console.log('Extracted coordinates:', coordinates);
+            
+            // Validate coordinates
+            if (!coordinates || !Array.isArray(coordinates) || coordinates.length < 3) {
+                throw new Error('Field polygon must have at least 3 points');
+            }
+            
+            // Verify first coordinate is valid [lon, lat]
+            if (!Array.isArray(coordinates[0]) || coordinates[0].length < 2) {
+                throw new Error('Invalid coordinate format');
+            }
+            
+            setAoiCoordinates(coordinates);
+            console.log('✅ Coordinates validated and set');
+            
+            // Calculate area
+            const area = calculatePolygonArea(coordinates);
+            setDrawnArea(area);
+            console.log('📏 Area calculated:', area);
+            
+            // Calculate center (assuming [lon, lat] format - standard GeoJSON)
+            const centerLng = coordinates.reduce((sum, coord) => sum + coord[0], 0) / coordinates.length;
+            const centerLat = coordinates.reduce((sum, coord) => sum + coord[1], 0) / coordinates.length;
+            
+            console.log('📍 Center location:', centerLat, centerLng);
+            
+            // Auto-fill form
+            setFormData(prevState => ({
+                ...prevState,
+                location: `${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}`,
+                area: area.toFixed(2)
+            }));
+            
+            console.log('🌤️ Fetching weather data...');
+            await fetchWeatherData(coordinates);
+            
+            console.log('✅ Field selection completed successfully!');
+            setError(''); // Clear any previous errors
+        } catch (err) {
+            console.error('❌ Error during field selection:', err);
+            setError(`Error: ${err.message}`);
+        }
+    };
+
+    // Calculate polygon area in hectares
+    const calculatePolygonArea = (coordinates) => {
+        if (!coordinates || coordinates.length < 3) return 0;
+        
+        let area = 0;
+        const n = coordinates.length;
+        
+        for (let i = 0; i < n; i++) {
+            const j = (i + 1) % n;
+            area += coordinates[i][0] * coordinates[j][1];
+            area -= coordinates[j][0] * coordinates[i][1];
+        }
+        
+        area = Math.abs(area) / 2;
+        // Convert square degrees to hectares (approximate)
+        const areaHectares = area * 12321;
+        
+        return areaHectares;
+    };
+
+    // Auto-generate top 3 crops based on field information
+    const generateTop3Crops = async (field, coordinates, centerLat, centerLng, areaHectares) => {
+        try {
+            setLoading(true);
+            setError('');
+            
+            // Use default values for N, P, K if not set
+            const defaultFertility = 'medium';
+            const defaultPH = 6.5;
+            const defaultTemp = 25;
+            const defaultHumidity = 65;
+            const defaultRainfall = 1000;
+            
+            const response = await axios.post(`${getFlaskApiUrl()}/api/top-3-crops`, {
+                field_data: {
+                    location: `${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}`,
+                    area: areaHectares.toFixed(2),
+                    fertility_level: defaultFertility,
+                    nitrogen: 75,
+                    phosphorus: 28,
+                    potassium: 51,
+                    soil_ph: defaultPH,
+                    temperature: defaultTemp,
+                    humidity: defaultHumidity,
+                    rainfall: defaultRainfall,
+                    irrigation: 'drip',
+                    experience: 'intermediate',
+                    budget: 'medium',
+                    previous_crop: ''
+                },
+                coordinates: coordinates
+            });
+            
+            console.log('Top 3 crops response:', response.data);
+            
+            if (response.data && response.data.recommended_crops) {
+                setRecommendations(response.data);
+            } else if (response.data && response.data.recommendations) {
+                setRecommendations(response.data.recommendations);
+            }
+        } catch (err) {
+            console.warn('Could not auto-generate top 3 crops:', err);
+            // Continue without auto-generation
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Fetch weather data from NASA POWER API via backend (last 6 months)
+    const fetchWeatherData = async (coordinates) => {
+        if (!coordinates || coordinates.length === 0) {
+            console.error('❌ No coordinates provided to fetchWeatherData');
+            return;
+        }
+
+        setWeatherDataLoading(true);
+        console.log('🌦️ Starting weather data fetch for coordinates:', coordinates);
+        
+        try {
+            // Get last 6 months of weather data, excluding last 5 days for NASA POWER API reliability
+            const endDate = new Date();
+            endDate.setDate(endDate.getDate() - 5); // Exclude last 5 days for NASA POWER API processing delay
+            
+            const startDate = new Date(endDate);
+            startDate.setMonth(startDate.getMonth() - 6); // Start 6 months before end date
+            
+            const formattedStartDate = startDate.toISOString().split('T')[0];
+            const formattedEndDate = endDate.toISOString().split('T')[0];
+            
+            console.log('📅 Date range:', formattedStartDate, 'to', formattedEndDate);
+            console.log('📊 Requesting weather data from:', 'http://localhost:3001/api/weather/data');
+            
+            const response = await axios.post(
+                'http://localhost:3001/api/weather/data',
+                {
+                    coordinates: coordinates,
+                    start_date: formattedStartDate,
+                    end_date: formattedEndDate
+                }
+            );
+            
+            console.log('✅ Weather API response received:', response.status);
+            console.log('📦 Response data structure:', Object.keys(response.data));
+            
+            // NASA POWER API returns data in properties.parameter structure
+            let weatherData = null;
+            
+            if (response.data && response.data.properties && response.data.properties.parameter) {
+                weatherData = response.data.properties.parameter;
+                console.log('📦 Found parameter data in properties.parameter');
+            } else if (response.data && response.data.parameter) {
+                weatherData = response.data.parameter;
+                console.log('📦 Found parameter data directly in response');
+            }
+            
+            if (weatherData) {
+                console.log('📋 Weather parameters available:', Object.keys(weatherData));
+                
+                // Calculate averages from the 6-month weather data
+                let avgTemp = 25;
+                let avgHumidity = 65;
+                let totalRainfall = 60;
+                
+                // Temperature averaging
+                if (weatherData.T2M && Object.keys(weatherData.T2M).length > 0) {
+                    const tempValues = Object.values(weatherData.T2M);
+                    avgTemp = tempValues.reduce((a, b) => a + b, 0) / tempValues.length;
+                    console.log(`🌡️ Temperature: ${tempValues.length} data points, avg = ${avgTemp.toFixed(2)}°C`);
+                }
+                
+                // Humidity averaging
+                if (weatherData.RH2M && Object.keys(weatherData.RH2M).length > 0) {
+                    const humidityValues = Object.values(weatherData.RH2M);
+                    avgHumidity = humidityValues.reduce((a, b) => a + b, 0) / humidityValues.length;
+                    console.log(`💧 Humidity: ${humidityValues.length} data points, avg = ${avgHumidity.toFixed(2)}%`);
+                }
+                
+                // Rainfall totaling
+                if (weatherData.PRECTOTCORR && Object.keys(weatherData.PRECTOTCORR).length > 0) {
+                    const rainfallValues = Object.values(weatherData.PRECTOTCORR);
+                    totalRainfall = rainfallValues.reduce((a, b) => a + b, 0);
+                    console.log(`🌧️ Rainfall: ${rainfallValues.length} data points, total = ${totalRainfall.toFixed(2)}mm`);
+                }
+                
+                console.log('🎯 Final calculated values:', { 
+                    avgTemp: avgTemp.toFixed(2), 
+                    avgHumidity: avgHumidity.toFixed(2), 
+                    totalRainfall: totalRainfall.toFixed(2) 
+                });
+                
+                setFormData(prevState => ({
+                    ...prevState,
+                    temperature: avgTemp.toFixed(2),
+                    humidity: avgHumidity.toFixed(2),
+                    rainfall: totalRainfall.toFixed(2)
+                }));
+                
+                console.log('✅ Form data updated with weather values');
+                setWeatherDataFetched(true);
+            } else {
+                console.warn('⚠️ Invalid weather response format - no parameter data found');
+                console.log('Response keys:', Object.keys(response.data || {}));
+                
+                // Set default values if response format is unexpected
+                setFormData(prevState => ({
+                    ...prevState,
+                    temperature: '25',
+                    humidity: '65',
+                    rainfall: '60'
+                }));
+                setWeatherDataFetched(true);
+            }
+        } catch (err) {
+            console.error('❌ Error fetching weather data:', err);
+            console.error('Error message:', err.message);
+            console.error('Error response:', err.response?.data);
+            
+            // Set default weather values if fetch fails - user can edit if needed
+            setFormData(prevState => ({
+                ...prevState,
+                temperature: '25',
+                humidity: '65',
+                rainfall: '60'
+            }));
+            setWeatherDataFetched(true);
+        } finally {
+            setWeatherDataLoading(false);
+            console.log('🏁 Weather data fetch completed');
+        }
+    };
+
+
     const renderCropRecommendations = (crops) => {
         if (!crops || !Array.isArray(crops)) return null;
+
+        const rankingSymbols = ['🥇', '🥈', '🥉'];
 
         return (
             <div className="crop-recommendations-section">
                 <h3 className="section-title">
-                    <span className="section-icon">🌾</span>
-                    AI-Recommended Crops
+                    <span className="section-icon">🤖</span>
+                    ML-Recommended Crops
                 </h3>
                 <div className="crops-grid">
                     {crops.map((crop, index) => (
                         <div key={index} className="crop-recommendation-card">
-                            <h4 className="crop-name">{crop.name}</h4>
+                            <div className="crop-header">
+                                <span className="ranking-badge">{rankingSymbols[index] || '⭐'}</span>
+                                <h4 className="crop-name">{crop.name}</h4>
+                            </div>
                             {crop.variety && (
                                 <p className="crop-variety"><strong>Variety:</strong> {crop.variety}</p>
                             )}
@@ -156,65 +596,137 @@ const CropSuggestion = () => {
         );
     };
 
+    const getCompletionPercentage = () => {
+        const totalFactors = recommendationFactors.reduce((sum, category) => sum + category.factors.length, 0);
+        const completeFactors = recommendationFactors.reduce((sum, category) => 
+            sum + category.factors.filter(f => f.status === 'complete').length, 0
+        );
+        return Math.round((completeFactors / totalFactors) * 100);
+    };
+
+    const completionPercentage = getCompletionPercentage();
+
     return (
         <div className="crop-suggestion-container">
             <div className="crop-suggestion-header">
-                <h1>🤖 AI-Powered Crop Recommendations</h1>
-                <p className="subtitle">Get intelligent, market-aware farming advice tailored to your land</p>
+                <h1>🚜 Crop Recommendations</h1>
+                <p className="subtitle">Draw your field on the map and get intelligent farming advice tailored to your land</p>
             </div>
 
+            <div className="crop-suggestion-content">
+                {/* Field Selector Section */}
+                <div className="field-selector-section">
+                    <div className="field-selector-header">
+                        <h2>🌾 Select Your Field</h2>
+                        <p className="field-selector-instruction">Choose from your saved fields or draw a new one</p>
+                    </div>
+
+                    {fieldsLoading ? (
+                        <div className="loading-fields">Loading your fields...</div>
+                    ) : fields.length > 0 ? (
+                        <div className="field-selector-wrapper">
+                            <div style={{marginBottom: '1rem', fontSize: '0.9rem', color: '#666'}}>
+                                <p>📌 Total fields found: <strong>{fields.length}</strong></p>
+                            </div>
+                            <FieldList 
+                                fields={fields}
+                                selectedField={selectedField}
+                                onFieldSelect={handleFieldSelect}
+                                compact={true}
+                            />
+                        </div>
+                    ) : (
+                        <div className="no-fields-message">
+                            <p>No saved fields found. Please go to Monitor Field to create one.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Factors Required Section */}
+                <div className="factors-section">
+                    <div className="factors-header">
+                        <h2>📋 Factors Needed for Recommendation</h2>
+                        <div className="completion-bar">
+                            <div className="completion-progress" style={{ width: `${completionPercentage}%` }}></div>
+                            <span className="completion-text">{completionPercentage}% Complete</span>
+                        </div>
+                    </div>
+
+                    <div className="factors-list">
+                        {recommendationFactors.map((category, idx) => (
+                            <div key={idx} className="factor-category">
+                                <h3 className="category-title">{category.category}</h3>
+                                <div className="category-factors">
+                                    {category.factors.map((factor, fidx) => (
+                                        <div key={fidx} className={`factor-item ${factor.status}`}>
+                                            <div className="factor-status">
+                                                {factor.status === 'complete' ? '✓' : '○'}
+                                            </div>
+                                            <div className="factor-details">
+                                                <strong>{factor.name}</strong>
+                                                <p>{factor.description}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {/* Form Section */}
             <form onSubmit={generateAIRecommendations} className="crop-form">
                 <div className="form-section">
-                    <h3>📍 Field Information</h3>
+                    <h3>📝 Field Details</h3>
                     <div className="form-grid">
                         <div className="form-group">
-                            <label htmlFor="location">Location</label>
+                            <label htmlFor="location">Location *</label>
                             <input
                                 type="text"
                                 id="location"
                                 name="location"
                                 value={formData.location}
                                 onChange={handleInputChange}
-                                placeholder="e.g., Punjab, India"
+                                placeholder="Auto-filled from map"
                                 required
+                                disabled
                             />
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="area">Field Size (hectares)</label>
+                            <label htmlFor="area">Field Size (hectares) *</label>
                             <input
                                 type="number"
                                 id="area"
                                 name="area"
                                 value={formData.area}
                                 onChange={handleInputChange}
-                                placeholder="e.g., 2.5"
+                                placeholder="Auto-calculated from map"
                                 step="0.1"
                                 required
+                                disabled
                             />
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="soil_type">Soil Type</label>
+                            <label htmlFor="fertility_level">Soil Fertility Level *</label>
                             <select
-                                id="soil_type"
-                                name="soil_type"
-                                value={formData.soil_type}
+                                id="fertility_level"
+                                name="fertility_level"
+                                value={formData.fertility_level}
                                 onChange={handleInputChange}
                                 required
                             >
-                                <option value="">Select Soil Type</option>
-                                <option value="clay">Clay</option>
-                                <option value="sandy">Sandy</option>
-                                <option value="loamy">Loamy</option>
-                                <option value="silt">Silt</option>
-                                <option value="chalky">Chalky</option>
-                                <option value="peaty">Peaty</option>
+                                <option value="">Select Fertility Level</option>
+                                <option value="low">Low Fertility (Poor Soil)</option>
+                                <option value="medium">Medium Fertility (Average Soil)</option>
+                                <option value="high">High Fertility (Rich Soil)</option>
                             </select>
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="soil_ph">Soil pH (optional)</label>
+                            <label htmlFor="soil_ph">Soil pH (Manual Entry) *</label>
                             <input
                                 type="number"
                                 id="soil_ph"
@@ -225,71 +737,94 @@ const CropSuggestion = () => {
                                 step="0.1"
                                 min="0"
                                 max="14"
+                                required
                             />
                         </div>
 
                         <div className="form-group">
-                            <label htmlFor="irrigation">Irrigation Facilities</label>
-                            <select
-                                id="irrigation"
-                                name="irrigation"
-                                value={formData.irrigation}
-                                onChange={handleInputChange}
-                                required
-                            >
-                                <option value="">Select Irrigation Type</option>
-                                <option value="drip">Drip Irrigation</option>
-                                <option value="sprinkler">Sprinkler Irrigation</option>
-                                <option value="flood">Flood Irrigation</option>
-                                <option value="rainwater">Rainwater Dependent</option>
-                                <option value="borewell">Borewell</option>
-                                <option value="canal">Canal Water</option>
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="experience">Farming Experience</label>
-                            <select
-                                id="experience"
-                                name="experience"
-                                value={formData.experience}
-                                onChange={handleInputChange}
-                                required
-                            >
-                                <option value="">Select Experience Level</option>
-                                <option value="beginner">Beginner (0-2 years)</option>
-                                <option value="intermediate">Intermediate (3-10 years)</option>
-                                <option value="experienced">Experienced (10+ years)</option>
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="budget">Budget Range (₹)</label>
-                            <select
-                                id="budget"
-                                name="budget"
-                                value={formData.budget}
-                                onChange={handleInputChange}
-                                required
-                            >
-                                <option value="">Select Budget Range</option>
-                                <option value="low">Low (₹10,000 - ₹50,000)</option>
-                                <option value="medium">Medium (₹50,000 - ₹2,00,000)</option>
-                                <option value="high">High (₹2,00,000+)</option>
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label htmlFor="previous_crop">Previous Crop (optional)</label>
+                            <label htmlFor="temperature">Temperature (°C) *</label>
                             <input
-                                type="text"
-                                id="previous_crop"
-                                name="previous_crop"
-                                value={formData.previous_crop}
+                                type="number"
+                                id="temperature"
+                                name="temperature"
+                                value={formData.temperature}
                                 onChange={handleInputChange}
-                                placeholder="e.g., Wheat, Rice, Cotton"
+                                placeholder="Auto-filled from weather API"
+                                step="0.1"
+                                required
                             />
                         </div>
+
+                        <div className="form-group">
+                            <label htmlFor="humidity">Humidity (%) *</label>
+                            <input
+                                type="number"
+                                id="humidity"
+                                name="humidity"
+                                value={formData.humidity}
+                                onChange={handleInputChange}
+                                placeholder="Auto-filled from weather API"
+                                step="0.1"
+                                required
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label htmlFor="rainfall">Rainfall (mm) *</label>
+                            <input
+                                type="number"
+                                id="rainfall"
+                                name="rainfall"
+                                value={formData.rainfall}
+                                onChange={handleInputChange}
+                                placeholder="Auto-filled from weather API"
+                                step="0.1"
+                                required
+                            />
+                        </div>
+
+                        {/* Display N, P, K values based on fertility level */}
+                        {formData.fertility_level && (
+                            <>
+                                <div className="form-group">
+                                    <label htmlFor="nitrogen">Nitrogen (N) kg/ha</label>
+                                    <input
+                                        type="number"
+                                        id="nitrogen"
+                                        name="nitrogen"
+                                        value={formData.nitrogen}
+                                        onChange={handleInputChange}
+                                        step="0.1"
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="phosphorus">Phosphorus (P) kg/ha</label>
+                                    <input
+                                        type="number"
+                                        id="phosphorus"
+                                        name="phosphorus"
+                                        value={formData.phosphorus}
+                                        onChange={handleInputChange}
+                                        step="0.1"
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label htmlFor="potassium">Potassium (K) kg/ha</label>
+                                    <input
+                                        type="number"
+                                        id="potassium"
+                                        name="potassium"
+                                        value={formData.potassium}
+                                        onChange={handleInputChange}
+                                        step="0.1"
+                                    />
+                                </div>
+                            </>
+                        )}
+
+
                     </div>
                 </div>
 
@@ -298,8 +833,17 @@ const CropSuggestion = () => {
                     className="generate-btn"
                     disabled={loading}
                 >
-                    {loading ? '🤖 AI Analyzing...' : '🚀 Generate AI Recommendations'}
+                    {loading ? '🤖 Analyzing...' : '🚀 Get Crop Recommendations'}
                 </button>
+                {weatherDataLoading && (
+                    <p className="form-hint">🔄 Fetching 6-month weather data (temperature, humidity, rainfall)...</p>
+                )}
+                {!weatherDataFetched && !weatherDataLoading && (
+                    <p className="form-hint">📍 Please select a field from the list to fetch weather data</p>
+                )}
+                {weatherDataFetched && !weatherDataLoading && (
+                    <p className="form-hint">✅ Weather data loaded for last 6 months - Ready to generate recommendations!</p>
+                )}
             </form>
 
             {error && (
@@ -311,14 +855,6 @@ const CropSuggestion = () => {
 
             {recommendations && (
                 <div className="recommendations-container">
-                    <div className="ai-attribution">
-                        <p>
-                            <span className="ai-icon">🤖</span>
-                            <strong>AI-Generated Analysis</strong> - 
-                            Powered by advanced agricultural intelligence for market-aware recommendations
-                        </p>
-                    </div>
-
                     <div className="analysis-cards">
                         {recommendations.land_analysis && 
                             renderAnalysisSection('Land Analysis', recommendations.land_analysis, '🌍')}

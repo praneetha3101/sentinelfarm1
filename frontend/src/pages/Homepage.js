@@ -24,7 +24,7 @@ const Homepage = () => {
   return (
     <div className="homepage-page">
       <div className="homepage-header">
-        <h1 className="page-title">🌾 Welcome to AgriScope</h1>
+        <h1 className="page-title">🌾 Welcome to SentinelFarm</h1>
         <p className="page-subtitle">
           {user ? `Welcome back, ${user.email}!` : 'Welcome!'} Your comprehensive agricultural monitoring and analysis platform.
         </p>

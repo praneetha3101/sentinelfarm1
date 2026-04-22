@@ -33,13 +33,13 @@
   color: #333;
 }
 
-.temp-icon, .rain-icon, .sun-icon {
+.temp-icon, .rain-icon, .sun-icon, .humidity-icon {
   font-size: 2rem;
   margin: 10px 0;
   animation: pulse 2s infinite;
 }
 
-.temp-value, .rain-value, .sun-value {
+.temp-value, .rain-value, .sun-value, .humidity-value {
   font-weight: 600;
   font-size: 1.2rem;
   margin: 8px 0 0;

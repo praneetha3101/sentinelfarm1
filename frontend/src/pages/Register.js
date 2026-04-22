@@ -67,7 +67,7 @@ const Register = () => {
     <div className="auth-page">
       {/* Page Header */}
       <div className="auth-header">
-        <h1 className="page-title">Join AgriScope</h1>
+        <h1 className="page-title">Join SentinelFarm</h1>
         <p className="page-subtitle">
           Create your account and start monitoring your agricultural fields with satellite data
         </p>
@@ -78,7 +78,7 @@ const Register = () => {
         {/* Sidebar */}
         <div className="auth-sidebar">
           <div className="sidebar-section">
-            <h3>🌱 Why Join AgriScope?</h3>
+            <h3>🌱 Why Join SentinelFarm?</h3>
             <div className="benefits-list">
               <div className="benefit-item">
                 <div className="benefit-icon">🛰️</div>

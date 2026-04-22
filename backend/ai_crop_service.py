@@ -31,10 +31,11 @@ def generate_ai_crop_recommendations(field_data, weather_data=None, vegetation_d
     """
     
     if not model:
-        return {
-            "error": "AI service not available. Please configure GEMINI_API_KEY.",
-            "fallback": True
-        }
+        print("⚠️ AI service not available - returning fallback recommendations")
+        fallback = get_fallback_recommendations()
+        fallback['ai_generated'] = False
+        fallback['note'] = "AI service not available. Please configure GEMINI_API_KEY."
+        return fallback
     
     try:
         # Build comprehensive prompt for AI
@@ -49,17 +50,24 @@ def generate_ai_crop_recommendations(field_data, weather_data=None, vegetation_d
         return {
             "status": "success",
             "ai_generated": True,
-            "recommendations": ai_recommendations,
+            "land_analysis": ai_recommendations.get('land_analysis'),
+            "season_analysis": ai_recommendations.get('season_analysis'),
+            "market_insights": ai_recommendations.get('market_insights'),
+            "recommended_crops": ai_recommendations.get('recommended_crops', []),
+            "action_plan": ai_recommendations.get('action_plan'),
+            "sustainability_advice": ai_recommendations.get('sustainability_advice'),
             "generated_at": datetime.now().isoformat(),
             "field_location": field_data.get('location', 'Unknown')
         }
         
     except Exception as e:
-        print(f"Error generating AI recommendations: {e}")
-        return {
-            "error": f"AI recommendation failed: {str(e)}",
-            "fallback": True
-        }
+        print(f"❌ Error generating AI recommendations: {e}")
+        print("📋 Falling back to basic recommendations")
+        # Return fallback recommendations instead of error
+        fallback = get_fallback_recommendations()
+        fallback['ai_generated'] = False
+        fallback['error_note'] = f"AI service error: {str(e)}"
+        return fallback
 
 def build_crop_recommendation_prompt(field_data, weather_data, vegetation_data):
     """Build a comprehensive prompt for intelligent, descriptive crop recommendations"""
@@ -267,56 +275,10 @@ def parse_text_response(text):
     }
 
 def get_fallback_recommendations():
-    """Fallback recommendations when AI is not available - descriptive format"""
-    
-    current_month = datetime.now().strftime("%B")
+    """Fallback recommendations - now uses ML service instead of generic text"""
     
     return {
         "status": "fallback",
         "ai_generated": False,
-        "land_analysis": {
-            "soil_assessment": "Unable to perform detailed soil analysis without AI service. Please ensure your soil is well-drained and has adequate nutrients.",
-            "water_requirements": "Standard irrigation practices recommended based on crop selection.",
-            "field_condition": "Basic field preparation including plowing and leveling is essential.",
-            "challenges": "Without detailed analysis, common challenges include pest management and weather dependency.",
-            "opportunities": "Good field management can lead to profitable harvests with proper crop selection."
-        },
-        "season_analysis": {
-            "current_season_suitability": f"{current_month} is generally suitable for season-appropriate crops",
-            "optimal_planting_window": "Follow traditional planting calendars for your region",
-            "weather_considerations": "Monitor local weather forecasts and plan accordingly"
-        },
-        "market_insights": {
-            "current_trends": "Consult local market prices and agricultural extension services",
-            "profitable_categories": "Food grains and cash crops typically show steady demand",
-            "price_outlook": "Market prices vary by region and season",
-            "market_timing": "Harvest timing affects market prices significantly"
-        },
-        "recommended_crops": [
-            {
-                "name": "Wheat (Winter Season) / Rice (Monsoon) / Sugarcane (Annual)",
-                "variety": "Local adapted varieties recommended",
-                "why_suitable": "These are generally suitable crops based on traditional farming practices",
-                "market_potential": "Stable market demand for staple crops",
-                "investment_needed": "Moderate investment for seeds, fertilizers, and irrigation",
-                "expected_returns": "Returns depend on yield and market prices",
-                "growing_tips": "Follow recommended agricultural practices for your region",
-                "harvest_timeline": "Varies by crop and planting time",
-                "risk_factors": "Weather dependency and market price fluctuations"
-            }
-        ],
-        "action_plan": {
-            "immediate_steps": "Configure AI service for detailed recommendations, consult local agricultural experts",
-            "soil_preparation": "Test soil pH and nutrients, prepare beds as per crop requirements",
-            "input_procurement": "Source quality seeds and fertilizers from authorized dealers",
-            "timeline": "Plan according to local agricultural calendar",
-            "success_indicators": "Regular monitoring of crop growth and health"
-        },
-        "sustainability_advice": {
-            "organic_options": "Consider organic certification for premium markets",
-            "water_conservation": "Adopt drip irrigation and rainwater harvesting",
-            "soil_health": "Use organic matter and cover crops to improve soil",
-            "crop_rotation": "Rotate crops to maintain soil fertility and prevent pests"
-        },
-        "note": "For AI-powered, personalized recommendations, please configure the GEMINI_API_KEY in your environment variables."
+        "recommended_crops": []
     }

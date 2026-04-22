@@ -7,3 +7,5 @@ earthengine-api
 requests
 python-dotenv
 google-generativeai
+scikit-learn
+xgboost

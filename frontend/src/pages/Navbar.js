@@ -27,7 +27,7 @@ const Navbar = () => {
 
   return (
     <nav className="navbar">
-      <div className="logo">AgriScope</div>
+      <div className="logo">SentinelFarm</div>
       <ul className="nav-links">
         <li><Link to="/homepage">Home</Link></li>
         <li><Link to="/AboutUs">About</Link></li>

@@ -24,7 +24,47 @@
       work correctly both with client-side routing and a non-root public URL.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
-    <title>AgriScope - Agricultural Intelligence Platform</title>
+    <title>SentinelFarm</title>
+    <div id="cropResults"></div>
+    <script>
+async function loadCropRecommendations(formData) {
+
+    const response = await fetch("http://localhost:5000/api/crop-recommendations", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify(formData)
+    });
+
+    const data = await response.json();
+
+    displayCrops(data.recommendations);
+}
+
+function displayCrops(crops) {
+
+    const resultsDiv = document.getElementById("cropResults");
+
+    if (!crops || crops.length === 0) {
+        resultsDiv.innerHTML = "<p>No recommendations found.</p>";
+        return;
+    }
+
+    let html = "<h3>Recommended Crops</h3>";
+
+    crops.forEach(crop => {
+        html += `
+            <div style="padding:15px; margin:10px 0; border:1px solid #ddd; border-radius:8px;">
+                <h4>${crop.rank}. ${crop.name}</h4>
+                <p>Confidence: ${crop.confidence}%</p>
+            </div>
+        `;
+    });
+
+    resultsDiv.innerHTML = html;
+}
+</script>
     
     <!-- Single Page Application redirect script for proper routing -->
     <script>

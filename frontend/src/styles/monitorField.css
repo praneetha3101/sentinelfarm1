@@ -199,6 +199,16 @@
   box-shadow: 0 4px 12px rgba(253, 126, 20, 0.4);
 }
 
+.soil-ph-btn {
+  background: linear-gradient(135deg, #17a2b8, #138496);
+  color: white;
+}
+
+.soil-ph-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(23, 162, 184, 0.4);
+}
+
 .analysis-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
