@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: sentinelfarm
+    env: node
+    region: ohio
+    plan: free
+    buildCommand: |
+      cd frontend && npm install && npm run build && cd ../backend && npm install
+    startCommand: cd backend && node server.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FLASK_API_URL
+        value: http://localhost:5001
+      - key: GOOGLE_SERVICE_ACCOUNT_KEY
+        sync: false
