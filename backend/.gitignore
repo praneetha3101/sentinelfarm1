@@ -57,3 +57,5 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+# Google service account secret
+backend/service-account-key.json
