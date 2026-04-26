@@ -1,6 +1,6 @@
 // API Configuration Constants
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_URL || "http://localhost:3001",
+  BASE_URL: process.env.REACT_APP_API_URL || "https://sentinelfarm1-1.onrender.com",
   FLASK_BASE_URL: process.env.REACT_APP_FLASK_API_URL || "http://localhost:5001",
   ENDPOINTS: {
     AUTH: {
