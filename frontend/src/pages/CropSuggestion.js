@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { getFlaskApiUrl } from '../config/api';
 import FieldList from '../components/FieldList';
 import '../styles/CropSuggestion.css';
+import { getApiUrl } from "../config/api";
 
 const CropSuggestion = () => {
     const navigate = useNavigate();
@@ -57,7 +58,7 @@ const CropSuggestion = () => {
                 const email = getUserEmail();
                 if (!email) return;
 
-                const response = await axios.get(`http://localhost:3001/api/fields?email=${email}`);
+                const response = await axios.get(`${getApiUrl()}/api/fields?email=${email}`);
                 console.log('Fields response:', response.data);
                 
                 if (response.data.fields && Array.isArray(response.data.fields)) {
@@ -410,10 +411,9 @@ const CropSuggestion = () => {
             const formattedEndDate = endDate.toISOString().split('T')[0];
             
             console.log('📅 Date range:', formattedStartDate, 'to', formattedEndDate);
-            console.log('📊 Requesting weather data from:', 'http://localhost:3001/api/weather/data');
-            
+console.log('📊 Requesting weather data from:', `${getApiUrl()}/api/weather/data`); 
             const response = await axios.post(
-                'http://localhost:3001/api/weather/data',
+    `${getApiUrl()}/api/weather/data`,
                 {
                     coordinates: coordinates,
                     start_date: formattedStartDate,
