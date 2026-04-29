@@ -227,8 +227,17 @@ const CropSuggestion = () => {
             return;
         }
         
+        // Clear previous selections
+        setSelectedField(null);
+        setFormData({});
+        setRecommendations(null);
+        setError('');
+        
+        // Now set the newly selected field
         setSelectedField(field);
-        console.log('=== FIELD SELECTED ===');
+        console.log('=== SINGLE FIELD SELECTED ===');
+        console.log('Selected field:', field.plot_name || field.id);
+        console.log('Field ID:', field.id || field._id);
         console.log('Full field object:', field);
         
         // Extract coordinates from various possible formats

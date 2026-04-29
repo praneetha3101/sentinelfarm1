@@ -64,12 +64,18 @@ const FieldList = ({ fields, selectedField, onFieldSelect, onFieldDelete, onFiel
         <p className="no-fields-msg">No fields match your search.</p>
       ) : (
         <ul className="fields-list">
-          {filteredFields.map((field) => (
-            <li 
-              key={field.id || field._id} 
-              className={`field-item ${selectedField && (selectedField.id === field.id || selectedField._id === field._id) ? 'selected' : ''}`}
-              onClick={() => onFieldSelect(field)}
-            >
+          {filteredFields.map((field) => {
+            // Determine if this field is selected
+            const fieldId = field.id || field._id;
+            const selectedId = selectedField ? (selectedField.id || selectedField._id) : null;
+            const isSelected = fieldId && selectedId && fieldId === selectedId;
+            
+            return (
+              <li 
+                key={fieldId} 
+                className={`field-item ${isSelected ? 'selected' : ''}`}
+                onClick={() => onFieldSelect(field)}
+              >
               {editingField === (field.id || field._id) ? (
                 <form onSubmit={handleRenameSubmit} className="field-rename-form">
                   <input
@@ -135,7 +141,8 @@ const FieldList = ({ fields, selectedField, onFieldSelect, onFieldDelete, onFiel
                 </>
               )}
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
       <p className="field-count">Total fields: {fields.length}</p>
