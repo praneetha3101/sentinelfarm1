@@ -376,11 +376,15 @@ const CropSuggestion = () => {
             
             console.log('Top 3 crops response:', response.data);
             
-            if (response.data && response.data.recommended_crops) {
-                setRecommendations(response.data);
-            } else if (response.data && response.data.recommendations) {
-                setRecommendations(response.data.recommendations);
-            }
+            if (response.data?.recommended_crops) {
+    setRecommendations(response.data.recommended_crops);
+} 
+else if (response.data?.recommendations?.recommended_crops) {
+    setRecommendations(response.data.recommendations.recommended_crops);
+} 
+else {
+    setRecommendations([]);
+}
         } catch (err) {
             console.warn('Could not auto-generate top 3 crops:', err);
             // Continue without auto-generation
