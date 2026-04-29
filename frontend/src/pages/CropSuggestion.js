@@ -312,8 +312,16 @@ const CropSuggestion = () => {
             
             console.log('🌤️ Fetching weather data...');
             await fetchWeatherData(coordinates);
-            
-            console.log('✅ Field selection completed successfully!');
+
+await generateTop3Crops(
+   field,
+   coordinates,
+   centerLat,
+   centerLng,
+   area
+);
+
+console.log('✅ Field selection completed successfully!');
             setError(''); // Clear any previous errors
         } catch (err) {
             console.error('❌ Error during field selection:', err);
@@ -376,14 +384,16 @@ const CropSuggestion = () => {
             
             console.log('Top 3 crops response:', response.data);
             
-            if (response.data?.recommended_crops) {
-    setRecommendations(response.data.recommended_crops);
-} 
-else if (response.data?.recommendations?.recommended_crops) {
-    setRecommendations(response.data.recommendations.recommended_crops);
-} 
+         if (response.data?.recommendations) {
+    setRecommendations(response.data.recommendations);
+}
+else if (response.data?.recommended_crops) {
+    setRecommendations({
+        recommended_crops: response.data.recommended_crops
+    });
+}
 else {
-    setRecommendations([]);
+    setRecommendations(null);
 }
         } catch (err) {
             console.warn('Could not auto-generate top 3 crops:', err);
