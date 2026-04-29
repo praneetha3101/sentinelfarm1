@@ -318,18 +318,13 @@ const CropSuggestion = () => {
             console.log('🌤️ Fetching weather data...');
             const weatherResult = await fetchWeatherData(coordinates);
 
-            // Auto-generate preview crops using actual weather data
-            await generateTop3Crops(
-                coordinates,
-                centerLat,
-                centerLng,
-                area,
-                weatherResult.temp,
-                weatherResult.humidity,
-                weatherResult.rainfall
-            );
+            // ✅ FIXED: Don't auto-generate crops on field selection
+            // Wait for user to fill soil pH, fertility level, and click button
+            // Clear any previous recommendations
+            setRecommendations(null);
 
             console.log('✅ Field selection completed successfully!');
+            console.log('📝 Please fill in Soil Fertility Level, Soil pH, and click "Get Crop Recommendations"');
             setError('');
         } catch (err) {
             console.error('❌ Error during field selection:', err);

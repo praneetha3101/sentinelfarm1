@@ -10,9 +10,16 @@ load_dotenv()
 
 # Configure Gemini AI
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+print(f"🔍 GEMINI_API_KEY environment check: {'Found' if GEMINI_API_KEY else 'NOT FOUND'}")
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    print(f"📝 API Key (first 20 chars): {GEMINI_API_KEY[:20]}...")
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        print("✅ Gemini AI configured successfully")
+    except Exception as config_error:
+        model = None
+        print(f"❌ Failed to configure Gemini AI: {config_error}")
 else:
     model = None
     print("⚠️ GEMINI_API_KEY not found. AI recommendations will not be available.")
@@ -39,13 +46,18 @@ def generate_ai_crop_recommendations(field_data, weather_data=None, vegetation_d
     
     try:
         # Build comprehensive prompt for AI
+        print(f"🔑 Using API Key: {GEMINI_API_KEY[:20]}..." if GEMINI_API_KEY else "🔑 No API Key!")
         prompt = build_crop_recommendation_prompt(field_data, weather_data, vegetation_data)
+        print(f"✅ Prompt built successfully ({len(prompt)} chars)")
         
         # Generate response from Gemini
+        print(f"🚀 Calling Gemini API...")
         response = model.generate_content(prompt)
+        print(f"✅ Gemini responded ({len(response.text)} chars)")
         
         # Parse AI response
         ai_recommendations = parse_ai_response(response.text)
+        print(f"✅ Parsed response successfully")
         
         return {
             "status": "success",
@@ -61,12 +73,14 @@ def generate_ai_crop_recommendations(field_data, weather_data=None, vegetation_d
         }
         
     except Exception as e:
-        print(f"❌ Error generating AI recommendations: {e}")
-        print("📋 Falling back to basic recommendations")
+        print(f"❌ Error generating AI recommendations: {type(e).__name__}: {e}")
+        import traceback
+        print(f"📋 Traceback: {traceback.format_exc()}")
         # Return fallback recommendations instead of error
         fallback = get_fallback_recommendations()
         fallback['ai_generated'] = False
         fallback['error_note'] = f"AI service error: {str(e)}"
+        fallback['error_type'] = type(e).__name__
         return fallback
 
 def build_crop_recommendation_prompt(field_data, weather_data, vegetation_data):
