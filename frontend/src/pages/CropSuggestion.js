@@ -28,7 +28,7 @@ const CropSuggestion = () => {
     const [weatherDataFetched, setWeatherDataFetched] = useState(false);
 
     const [recommendations, setRecommendations] = useState(null);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(false); // v2
     const [error, setError] = useState('');
 
     // Field selection state
