@@ -25,7 +25,8 @@ except ImportError as e:
 # Import ML crop recommendation service
 try:
     from ml_crop_service import MLCropRecommendationService
-    ml_crop_service = MLCropRecommendationService('crop_recommendation_dataset.csv')
+    _csv_path = os.path.join(os.path.dirname(__file__), 'crop_recommendation_dataset.csv')
+    ml_crop_service = MLCropRecommendationService(_csv_path)
     ML_CROP_SERVICE_AVAILABLE = True
     print("✅ ML Crop Recommendation Service initialized")
 except ImportError as e:
@@ -894,7 +895,7 @@ def get_ai_crop_recommendations():
             elif not has_valid_crops:
                 # AI didn't generate valid recommendations - try ML service instead
                 print("[+] AI service returned no crops - trying ML service")
-                if ML_CROP_SERVICE_AVAILABLE and ml_crop_service and ml_inference and ml_inference.models_available:
+                if ML_CROP_SERVICE_AVAILABLE and ml_crop_service and ml_inference is not None and ml_inference.models_available:
                     input_features = {
                         'N': float(field_data.get('nitrogen', 75)),
                         'P': float(field_data.get('phosphorus', 28)),
@@ -920,7 +921,7 @@ def get_ai_crop_recommendations():
                         }), 200
         
         # If AI service completely failed or unavailable, try ML service
-        if ML_CROP_SERVICE_AVAILABLE and ml_crop_service and ml_inference and ml_inference.models_available:
+        if ML_CROP_SERVICE_AVAILABLE and ml_crop_service and ml_inference is not None and ml_inference.models_available:
             print("[+] Using ML-based crop recommendations with crop dataset insights")
             
             # Prepare features for ML model
@@ -972,7 +973,7 @@ def get_ai_crop_recommendations():
         
         try:
             # Try ML-based fallback
-            if ML_CROP_SERVICE_AVAILABLE and ml_crop_service and ml_inference and ml_inference.models_available:
+            if ML_CROP_SERVICE_AVAILABLE and ml_crop_service and ml_inference is not None and ml_inference.models_available:
                 input_features = {
                     'N': float(field_data.get('nitrogen', 75)),
                     'P': float(field_data.get('phosphorus', 28)),
@@ -1315,8 +1316,9 @@ except ImportError as e:
 
 # Import and initialize ML inference
 try:
-    from crop_ml_inference import get_ml_inference
-    ml_inference = get_ml_inference()
+    from crop_ml_inference import CropModelInference
+    _model_dir = os.path.join(os.path.dirname(__file__), 'models')
+    ml_inference = CropModelInference(model_dir=_model_dir)
     print("✅ ML inference engine initialized")
 except ImportError as e:
     print(f"⚠️ ML inference not available: {e}")
@@ -1365,34 +1367,34 @@ def get_top_3_crops():
                 "message": "ML model prediction failed"
             }), 500
         
-        # Format response
+        # Generate rich recommendations using ml_crop_service if available
+        if ML_CROP_SERVICE_AVAILABLE and ml_crop_service:
+            ml_recommendations = ml_crop_service.generate_ml_recommendations(top_3_crops, field_data)
+            return jsonify({
+                "status": "success",
+                "method": "fast_ml_ensemble",
+                "recommendations": ml_recommendations,
+                "timestamp": datetime.now().isoformat()
+            }), 200
+        
+        # Fallback: return simple format
         recommended_crops = [
             {
                 "name": crop_name,
                 "confidence": confidence,
-                "rank": idx + 1
+                "rank": idx + 1,
+                "why_suitable": f"ML model confidence: {confidence:.1f}%",
+                "market_potential": "Good market demand"
             }
             for idx, (crop_name, confidence) in enumerate(top_3_crops)
         ]
         
-        response = {
+        return jsonify({
             "status": "success",
             "method": "fast_ml_ensemble",
-            "recommended_crops": recommended_crops,
-            "field_info": {
-                "location": field_data.get('location'),
-                "area": field_data.get('area'),
-                "fertility_level": field_data.get('fertility_level')
-            },
-            "ensemble_details": {
-                "model_predictions": ensemble_results.get('model_specific_predictions', {}),
-                "top_3": top_3_crops
-            },
+            "recommendations": {"recommended_crops": recommended_crops},
             "timestamp": datetime.now().isoformat()
-        }
-        
-        print(f"✅ Top 3 crops generated: {[c['name'] for c in recommended_crops]}")
-        return jsonify(response), 200
+        }), 200
     
     except Exception as e:
         print(f"❌ Error in top-3-crops endpoint: {str(e)}")

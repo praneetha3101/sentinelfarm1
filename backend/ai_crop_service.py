@@ -280,5 +280,6 @@ def get_fallback_recommendations():
     return {
         "status": "fallback",
         "ai_generated": False,
-        "recommended_crops": []
+        "recommended_crops": [],
+        "ai_note": "AI service unavailable. Please ensure GEMINI_API_KEY is configured, or the ML model will provide recommendations."
     }
