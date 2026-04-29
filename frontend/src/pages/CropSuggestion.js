@@ -150,14 +150,19 @@ const CropSuggestion = () => {
         setRecommendations(null);
 
         try {
+            // Get current N/P/K from fertility level if set
+            const n = formData.nitrogen ? parseFloat(formData.nitrogen) : 75;
+            const p = formData.phosphorus ? parseFloat(formData.phosphorus) : 28;
+            const k = formData.potassium ? parseFloat(formData.potassium) : 51;
+
             const response = await axios.post(`${getFlaskApiUrl()}/api/crop-recommendations`, {
                 field_data: {
                     location: formData.location,
                     area: parseFloat(formData.area),
                     fertility_level: formData.fertility_level,
-                    nitrogen: parseFloat(formData.nitrogen),
-                    phosphorus: parseFloat(formData.phosphorus),
-                    potassium: parseFloat(formData.potassium),
+                    nitrogen: n,
+                    phosphorus: p,
+                    potassium: k,
                     soil_ph: parseFloat(formData.soil_ph),
                     temperature: parseFloat(formData.temperature),
                     humidity: parseFloat(formData.humidity),
@@ -311,18 +316,21 @@ const CropSuggestion = () => {
             }));
             
             console.log('🌤️ Fetching weather data...');
-            await fetchWeatherData(coordinates);
+            const weatherResult = await fetchWeatherData(coordinates);
 
-await generateTop3Crops(
-   field,
-   coordinates,
-   centerLat,
-   centerLng,
-   area
-);
+            // Auto-generate preview crops using actual weather data
+            await generateTop3Crops(
+                coordinates,
+                centerLat,
+                centerLng,
+                area,
+                weatherResult.temp,
+                weatherResult.humidity,
+                weatherResult.rainfall
+            );
 
-console.log('✅ Field selection completed successfully!');
-            setError(''); // Clear any previous errors
+            console.log('✅ Field selection completed successfully!');
+            setError('');
         } catch (err) {
             console.error('❌ Error during field selection:', err);
             setError(`Error: ${err.message}`);
@@ -349,180 +357,81 @@ console.log('✅ Field selection completed successfully!');
         return areaHectares;
     };
 
-    // Auto-generate top 3 crops based on field information
-    const generateTop3Crops = async (field, coordinates, centerLat, centerLng, areaHectares) => {
+    // Auto-generate top 3 crops based on field information - called after weather data is fetched
+    const generateTop3Crops = async (coordinates, centerLat, centerLng, areaHectares, weatherTemp, weatherHumidity, weatherRainfall) => {
         try {
-            setLoading(true);
-            setError('');
-            
-            // Use default values for N, P, K if not set
-            const defaultFertility = 'medium';
-            const defaultPH = 6.5;
-            const defaultTemp = 25;
-            const defaultHumidity = 65;
-            const defaultRainfall = 1000;
-            
             const response = await axios.post(`${getFlaskApiUrl()}/api/top-3-crops`, {
                 field_data: {
                     location: `${centerLat.toFixed(4)}, ${centerLng.toFixed(4)}`,
-                    area: areaHectares.toFixed(2),
-                    fertility_level: defaultFertility,
+                    area: parseFloat(areaHectares.toFixed(2)),
+                    fertility_level: 'medium',
                     nitrogen: 75,
                     phosphorus: 28,
                     potassium: 51,
-                    soil_ph: defaultPH,
-                    temperature: defaultTemp,
-                    humidity: defaultHumidity,
-                    rainfall: defaultRainfall,
-                    irrigation: 'drip',
-                    experience: 'intermediate',
-                    budget: 'medium',
-                    previous_crop: ''
+                    soil_ph: 6.5,
+                    temperature: weatherTemp,
+                    humidity: weatherHumidity,
+                    rainfall: weatherRainfall
                 },
                 coordinates: coordinates
             });
-            
-            console.log('Top 3 crops response:', response.data);
-            
-         if (response.data?.recommendations) {
-    setRecommendations(response.data.recommendations);
-}
-else if (response.data?.recommended_crops) {
-    setRecommendations({
-        recommended_crops: response.data.recommended_crops
-    });
-}
-else {
-    setRecommendations(null);
-}
+
+            if (response.data?.recommendations) {
+                setRecommendations(response.data.recommendations);
+            }
         } catch (err) {
             console.warn('Could not auto-generate top 3 crops:', err);
-            // Continue without auto-generation
-        } finally {
-            setLoading(false);
         }
     };
 
-    // Fetch weather data from NASA POWER API via backend (last 6 months)
+    // Fetch weather data - returns the computed values so generateTop3Crops can use them
     const fetchWeatherData = async (coordinates) => {
-        if (!coordinates || coordinates.length === 0) {
-            console.error('❌ No coordinates provided to fetchWeatherData');
-            return;
-        }
+        if (!coordinates || coordinates.length === 0) return { temp: 25, humidity: 65, rainfall: 60 };
 
         setWeatherDataLoading(true);
-        console.log('🌦️ Starting weather data fetch for coordinates:', coordinates);
-        
+        let avgTemp = 25, avgHumidity = 65, totalRainfall = 60;
+
         try {
-            // Get last 6 months of weather data, excluding last 5 days for NASA POWER API reliability
             const endDate = new Date();
-            endDate.setDate(endDate.getDate() - 5); // Exclude last 5 days for NASA POWER API processing delay
-            
+            endDate.setDate(endDate.getDate() - 5);
             const startDate = new Date(endDate);
-            startDate.setMonth(startDate.getMonth() - 6); // Start 6 months before end date
-            
-            const formattedStartDate = startDate.toISOString().split('T')[0];
-            const formattedEndDate = endDate.toISOString().split('T')[0];
-            
-            console.log('📅 Date range:', formattedStartDate, 'to', formattedEndDate);
-console.log('📊 Requesting weather data from:', `${getApiUrl()}/api/weather/data`); 
-            const response = await axios.post(
-    `${getApiUrl()}/api/weather/data`,
-                {
-                    coordinates: coordinates,
-                    start_date: formattedStartDate,
-                    end_date: formattedEndDate
-                }
-            );
-            
-            console.log('✅ Weather API response received:', response.status);
-            console.log('📦 Response data structure:', Object.keys(response.data));
-            
-            // NASA POWER API returns data in properties.parameter structure
-            let weatherData = null;
-            
-            if (response.data && response.data.properties && response.data.properties.parameter) {
-                weatherData = response.data.properties.parameter;
-                console.log('📦 Found parameter data in properties.parameter');
-            } else if (response.data && response.data.parameter) {
-                weatherData = response.data.parameter;
-                console.log('📦 Found parameter data directly in response');
-            }
-            
+            startDate.setMonth(startDate.getMonth() - 6);
+
+            const response = await axios.post(`${getApiUrl()}/api/weather/data`, {
+                coordinates,
+                start_date: startDate.toISOString().split('T')[0],
+                end_date: endDate.toISOString().split('T')[0]
+            });
+
+            const weatherData = response.data?.properties?.parameter || response.data?.parameter;
+
             if (weatherData) {
-                console.log('📋 Weather parameters available:', Object.keys(weatherData));
-                
-                // Calculate averages from the 6-month weather data
-                let avgTemp = 25;
-                let avgHumidity = 65;
-                let totalRainfall = 60;
-                
-                // Temperature averaging
-                if (weatherData.T2M && Object.keys(weatherData.T2M).length > 0) {
-                    const tempValues = Object.values(weatherData.T2M);
-                    avgTemp = tempValues.reduce((a, b) => a + b, 0) / tempValues.length;
-                    console.log(`🌡️ Temperature: ${tempValues.length} data points, avg = ${avgTemp.toFixed(2)}°C`);
+                if (weatherData.T2M) {
+                    const vals = Object.values(weatherData.T2M);
+                    avgTemp = vals.reduce((a, b) => a + b, 0) / vals.length;
                 }
-                
-                // Humidity averaging
-                if (weatherData.RH2M && Object.keys(weatherData.RH2M).length > 0) {
-                    const humidityValues = Object.values(weatherData.RH2M);
-                    avgHumidity = humidityValues.reduce((a, b) => a + b, 0) / humidityValues.length;
-                    console.log(`💧 Humidity: ${humidityValues.length} data points, avg = ${avgHumidity.toFixed(2)}%`);
+                if (weatherData.RH2M) {
+                    const vals = Object.values(weatherData.RH2M);
+                    avgHumidity = vals.reduce((a, b) => a + b, 0) / vals.length;
                 }
-                
-                // Rainfall totaling
-                if (weatherData.PRECTOTCORR && Object.keys(weatherData.PRECTOTCORR).length > 0) {
-                    const rainfallValues = Object.values(weatherData.PRECTOTCORR);
-                    totalRainfall = rainfallValues.reduce((a, b) => a + b, 0);
-                    console.log(`🌧️ Rainfall: ${rainfallValues.length} data points, total = ${totalRainfall.toFixed(2)}mm`);
+                if (weatherData.PRECTOTCORR) {
+                    totalRainfall = Object.values(weatherData.PRECTOTCORR).reduce((a, b) => a + b, 0);
                 }
-                
-                console.log('🎯 Final calculated values:', { 
-                    avgTemp: avgTemp.toFixed(2), 
-                    avgHumidity: avgHumidity.toFixed(2), 
-                    totalRainfall: totalRainfall.toFixed(2) 
-                });
-                
-                setFormData(prevState => ({
-                    ...prevState,
-                    temperature: avgTemp.toFixed(2),
-                    humidity: avgHumidity.toFixed(2),
-                    rainfall: totalRainfall.toFixed(2)
-                }));
-                
-                console.log('✅ Form data updated with weather values');
-                setWeatherDataFetched(true);
-            } else {
-                console.warn('⚠️ Invalid weather response format - no parameter data found');
-                console.log('Response keys:', Object.keys(response.data || {}));
-                
-                // Set default values if response format is unexpected
-                setFormData(prevState => ({
-                    ...prevState,
-                    temperature: '25',
-                    humidity: '65',
-                    rainfall: '60'
-                }));
-                setWeatherDataFetched(true);
             }
         } catch (err) {
-            console.error('❌ Error fetching weather data:', err);
-            console.error('Error message:', err.message);
-            console.error('Error response:', err.response?.data);
-            
-            // Set default weather values if fetch fails - user can edit if needed
-            setFormData(prevState => ({
-                ...prevState,
-                temperature: '25',
-                humidity: '65',
-                rainfall: '60'
+            console.warn('Weather fetch failed, using defaults:', err.message);
+        } finally {
+            setFormData(prev => ({
+                ...prev,
+                temperature: avgTemp.toFixed(2),
+                humidity: avgHumidity.toFixed(2),
+                rainfall: totalRainfall.toFixed(2)
             }));
             setWeatherDataFetched(true);
-        } finally {
             setWeatherDataLoading(false);
-            console.log('🏁 Weather data fetch completed');
         }
+
+        return { temp: parseFloat(avgTemp.toFixed(2)), humidity: parseFloat(avgHumidity.toFixed(2)), rainfall: parseFloat(totalRainfall.toFixed(2)) };
     };
 
 
@@ -867,43 +776,22 @@ console.log('📊 Requesting weather data from:', `${getApiUrl()}/api/weather/da
                 </div>
             )}
 
-            {recommendations && (
-                <div className="recommendations-container">
-                    <div className="analysis-cards">
-                        {recommendations.land_analysis && 
-                            renderAnalysisSection('Land Analysis', recommendations.land_analysis, '🌍')}
-                        
-                        {recommendations.season_analysis && 
-                            renderAnalysisSection('Season Analysis', recommendations.season_analysis, '🌤️')}
-                        
-                        {recommendations.market_insights && 
-                            renderAnalysisSection('Market Insights', recommendations.market_insights, '📈')}
-                    </div>
-
-                    {recommendations.recommended_crops && 
-                        renderCropRecommendations(recommendations.recommended_crops)}
-
-                    <div className="analysis-cards">
-                        {recommendations.action_plan && 
-                            renderAnalysisSection('Action Plan', recommendations.action_plan, '📋')}
-                        
-                        {recommendations.sustainability_advice && 
-                            renderAnalysisSection('Sustainability Advice', recommendations.sustainability_advice, '♻️')}
-                    </div>
-
-                    {recommendations.ai_note && (
-                        <div className="ai-note">
-                            <p><strong>Note:</strong> {recommendations.ai_note}</p>
-                        </div>
-                    )}
-
-                    {recommendations.note && (
-                        <div className="fallback-note">
-                            <p><strong>Note:</strong> {recommendations.note}</p>
-                        </div>
-                    )}
-                </div>
-            )}
+           {recommendations && (
+    <div className="recommendations-container">
+        {recommendations?.recommended_crops?.length > 0 &&
+            renderCropRecommendations(recommendations.recommended_crops)
+        }
+        <div className="analysis-cards">
+            {recommendations.land_analysis && renderAnalysisSection('Land Analysis', recommendations.land_analysis, '🌍')}
+            {recommendations.season_analysis && renderAnalysisSection('Season Analysis', recommendations.season_analysis, '🌤️')}
+            {recommendations.market_insights && renderAnalysisSection('Market Insights', recommendations.market_insights, '📈')}
+        </div>
+        <div className="analysis-cards">
+            {recommendations.action_plan && renderAnalysisSection('Action Plan', recommendations.action_plan, '📋')}
+            {recommendations.sustainability_advice && renderAnalysisSection('Sustainability Advice', recommendations.sustainability_advice, '♻️')}
+        </div>
+    </div>
+)}
         </div>
     );
 };
